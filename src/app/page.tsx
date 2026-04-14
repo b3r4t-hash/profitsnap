@@ -81,6 +81,29 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Footer */}
+      <footer className="border-t py-8 px-6 bg-gray-50">
+        <div className="max-w-3xl mx-auto text-center text-sm text-gray-400 space-y-3">
+          <div className="flex flex-wrap justify-center gap-5">
+            <Link href="/cgu" className="hover:text-gray-600 transition-colors">
+              Conditions d&apos;utilisation
+            </Link>
+            <Link href="/confidentialite" className="hover:text-gray-600 transition-colors">
+              Confidentialité
+            </Link>
+            <a
+              href="https://www.ebay.fr/help/selling/fees-credits-invoices/selling-fees"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-gray-600 transition-colors"
+            >
+              Frais eBay officiels ↗
+            </a>
+          </div>
+          <p>© 2026 ProfitSnap · Outil d&apos;estimation — les résultats sont indicatifs et non garantis.</p>
+        </div>
+      </footer>
     </main>
   )
 }

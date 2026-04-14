@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { TrendingUp, TrendingDown, AlertTriangle, Loader2, Save } from 'lucide-react'
+import { TrendingUp, TrendingDown, AlertTriangle, Loader2, Save, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { calculateAndSave } from '@/app/app/calculator/actions'
 import { calculate } from '@/lib/calculator'
@@ -18,6 +18,7 @@ const CATEGORIES: { value: EbayCategory; label: string; fees: string }[] = [
 type Props = {
   plan: string
   dailyUsed: number
+  isFirstVisit: boolean
 }
 
 const EMPTY_FORM = {
@@ -28,14 +29,39 @@ const EMPTY_FORM = {
   category:      'other' as EbayCategory,
 }
 
-export default function CalculatorClient({ plan, dailyUsed }: Props) {
-  const [form, setForm]       = useState(EMPTY_FORM)
-  const [result, setResult]   = useState<CalculatorResult | null>(null)
+// Données d'exemple pré-remplies pour les nouveaux utilisateurs
+const EXAMPLE_FORM = {
+  productName:   'Nike Air Max 90',
+  purchasePrice: '45',
+  sellingPrice:  '75',
+  shippingCost:  '6.99',
+  category:      'clothing' as EbayCategory,
+}
+
+// Résultat exemple pré-calculé (source unique, calculé à la compilation)
+const EXAMPLE_RESULT: CalculatorResult = calculate({
+  purchasePrice: 45,
+  sellingPrice:  75,
+  shippingCost:  6.99,
+  category:      'clothing',
+})
+
+export default function CalculatorClient({ plan, dailyUsed, isFirstVisit }: Props) {
+  const [form, setForm]           = useState(isFirstVisit ? EXAMPLE_FORM : EMPTY_FORM)
+  const [result, setResult]       = useState<CalculatorResult | null>(isFirstVisit ? EXAMPLE_RESULT : null)
+  const [isExampleMode, setIsExampleMode] = useState(isFirstVisit)
+  // Empêche de revenir à l'exemple après Effacer dans la même session
+  const [hasLeftExample, setHasLeftExample] = useState(false)
   const [showUpsell, setShowUpsell] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  // Live preview (client-side, instant)
+  // Calcul live (client-side, instantané)
   function handleChange(field: string, value: string) {
+    // Première frappe : sortir du mode exemple
+    if (isExampleMode) {
+      setIsExampleMode(false)
+    }
+
     const next = { ...form, [field]: value }
     setForm(next)
 
@@ -55,9 +81,17 @@ export default function CalculatorClient({ plan, dailyUsed }: Props) {
     }
   }
 
-  // Save to DB via Server Action
+  // Effacer : vide tout, ne revient jamais à l'exemple dans cette session
+  function handleClear() {
+    setForm(EMPTY_FORM)
+    setResult(null)
+    setIsExampleMode(false)
+    setHasLeftExample(true)
+  }
+
+  // Sauvegarder via Server Action
   function handleSave() {
-    if (!result) return
+    if (!result || isExampleMode) return
     const fd = new FormData()
     Object.entries(form).forEach(([k, v]) => fd.append(k, v))
 
@@ -100,16 +134,39 @@ export default function CalculatorClient({ plan, dailyUsed }: Props) {
   }
 
   const vc = result ? verdictConfig[result.verdict] : null
+  const canSave = !!result && !isExampleMode && !isPending
 
   return (
     <>
+      {/* ── Bandeau exemple ─────────────────────────────────────── */}
+      {isExampleMode && (
+        <div className="mb-4 flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-700">
+          <span className="text-base">💡</span>
+          <span>
+            <strong>Exemple pré-rempli</strong> — modifie les données pour commencer ton propre calcul.
+          </span>
+        </div>
+      )}
+
       <div className="grid lg:grid-cols-2 gap-6 max-w-4xl">
-        {/* ── Form ─────────────────────────────────────────────── */}
+        {/* ── Formulaire ───────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border p-6 shadow-sm">
-          <h2 className="font-semibold text-gray-900 mb-5">Données du produit</h2>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="font-semibold text-gray-900">Données du produit</h2>
+            {/* Bouton Effacer — visible dès qu'un champ est rempli */}
+            {(form.purchasePrice || form.sellingPrice || form.productName) && (
+              <button
+                onClick={handleClear}
+                className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+                Effacer
+              </button>
+            )}
+          </div>
 
           <div className="space-y-4">
-            {/* Product name (optional) */}
+            {/* Nom du produit (optionnel) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Nom du produit <span className="text-gray-400 font-normal">(optionnel)</span>
@@ -123,7 +180,7 @@ export default function CalculatorClient({ plan, dailyUsed }: Props) {
               />
             </div>
 
-            {/* Prices row */}
+            {/* Prix */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -155,7 +212,7 @@ export default function CalculatorClient({ plan, dailyUsed }: Props) {
               </div>
             </div>
 
-            {/* Shipping */}
+            {/* Livraison */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Frais de livraison (€)
@@ -171,7 +228,7 @@ export default function CalculatorClient({ plan, dailyUsed }: Props) {
               />
             </div>
 
-            {/* Category */}
+            {/* Catégorie */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Catégorie eBay
@@ -201,13 +258,14 @@ export default function CalculatorClient({ plan, dailyUsed }: Props) {
             </div>
           </div>
 
-          {/* Save button */}
+          {/* Bouton sauvegarder */}
           <button
             onClick={handleSave}
-            disabled={!result || isPending}
+            disabled={!canSave}
+            title={isExampleMode ? 'Modifie les données pour sauvegarder ton propre calcul' : undefined}
             className={cn(
               'mt-6 w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-colors',
-              result
+              canSave
                 ? 'bg-green-600 text-white hover:bg-green-700'
                 : 'bg-gray-100 text-gray-400 cursor-not-allowed'
             )}
@@ -225,25 +283,32 @@ export default function CalculatorClient({ plan, dailyUsed }: Props) {
           )}
         </div>
 
-        {/* ── Result ───────────────────────────────────────────── */}
+        {/* ── Résultat ─────────────────────────────────────────────── */}
         <div>
           {result && vc ? (
             <div className={cn('rounded-2xl border p-6 shadow-sm transition-all', vc.bg)}>
-              {/* Verdict badge */}
-              <div className={cn('inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold mb-5', vc.badge)}>
-                <vc.icon className="w-4 h-4" />
-                {vc.label}
+              {/* Badge verdict + tag exemple */}
+              <div className="flex items-center gap-2 mb-5 flex-wrap">
+                <div className={cn('inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold', vc.badge)}>
+                  <vc.icon className="w-4 h-4" />
+                  {vc.label}
+                </div>
+                {isExampleMode && (
+                  <span className="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded-full font-medium">
+                    Exemple estimé
+                  </span>
+                )}
               </div>
 
-              {/* Main metric */}
+              {/* Métrique principale */}
               <div className="mb-6">
                 <p className={cn('text-4xl font-bold', vc.text)}>
                   {formatCurrency(result.netProfit)}
                 </p>
-                <p className="text-sm text-gray-500 mt-1">bénéfice net par vente</p>
+                <p className="text-sm text-gray-500 mt-1">bénéfice net estimé par vente</p>
               </div>
 
-              {/* Metrics grid */}
+              {/* Grille métriques */}
               <div className="grid grid-cols-2 gap-3">
                 <Metric label="Marge nette"   value={formatPct(result.marginPct)} />
                 <Metric label="ROI"            value={formatPct(result.roiPct)} />
@@ -251,12 +316,31 @@ export default function CalculatorClient({ plan, dailyUsed }: Props) {
                 <Metric label="Revenu net"     value={formatCurrency(result.netRevenue)} />
               </div>
 
-              {/* Breakdown */}
-              <div className="mt-5 pt-4 border-t border-black/10 space-y-1.5 text-sm">
-                <BreakdownRow label="Prix de vente"      value={`+ ${formatCurrency(parseFloat(form.sellingPrice))}`} />
-                <BreakdownRow label="Frais eBay"         value={`- ${formatCurrency(result.ebayFees)}`} muted />
-                <BreakdownRow label="Livraison"          value={`- ${formatCurrency(parseFloat(form.shippingCost) || 0)}`} muted />
-                <BreakdownRow label="Prix d'achat"       value={`- ${formatCurrency(parseFloat(form.purchasePrice))}`} muted />
+              {/* Prix maximum conseillé — différenciateur principal */}
+              <div className="mt-5 bg-white/70 rounded-xl px-4 py-3 border border-black/10">
+                <p className="text-xs text-gray-500 mb-0.5">💡 Prix maximum d&apos;achat conseillé</p>
+                {result.maxPurchasePrice > 0 ? (
+                  <>
+                    <p className="text-xl font-bold text-gray-900">
+                      {formatCurrency(result.maxPurchasePrice)}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Pour atteindre au moins 15% de marge nette à ce prix de vente
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-red-600 font-medium mt-0.5">
+                    Prix de vente insuffisant — non rentable à ce tarif eBay
+                  </p>
+                )}
+              </div>
+
+              {/* Détail */}
+              <div className="mt-4 pt-4 border-t border-black/10 space-y-1.5 text-sm">
+                <BreakdownRow label="Prix de vente"  value={`+ ${formatCurrency(parseFloat(form.sellingPrice))}`} />
+                <BreakdownRow label="Frais eBay"     value={`- ${formatCurrency(result.ebayFees)}`} muted />
+                <BreakdownRow label="Livraison"      value={`- ${formatCurrency(parseFloat(form.shippingCost) || 0)}`} muted />
+                <BreakdownRow label="Prix d'achat"   value={`- ${formatCurrency(parseFloat(form.purchasePrice))}`} muted />
                 <div className="pt-1.5 border-t border-black/10">
                   <BreakdownRow
                     label="Bénéfice net"
@@ -265,6 +349,11 @@ export default function CalculatorClient({ plan, dailyUsed }: Props) {
                   />
                 </div>
               </div>
+
+              {/* Mention estimé */}
+              <p className="mt-4 text-xs text-gray-400">
+                Résultats estimés — les frais eBay réels peuvent varier selon votre compte.
+              </p>
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed bg-white p-6 shadow-sm h-full flex items-center justify-center text-center">

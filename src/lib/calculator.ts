@@ -26,15 +26,22 @@ export function calculate(input: CalculatorInput): CalculatorResult {
     marginPct >  MARGIN_THRESHOLD_LOW  ? 'low_margin' :
     'loss'
 
+  // Prix maximum d'achat conseillé — pour atteindre au moins 15% de marge nette
+  // Formule : maxPurchasePrice = sellingPrice × (1 - ebayFeesPct - 0.15) - shippingCost
+  const maxPurchasePrice = round(
+    sellingPrice * (1 - ebayFeesPct - MARGIN_THRESHOLD_GOOD / 100) - shippingCost
+  )
+
   return {
-    ebayFees:    round(ebayFees),
-    ebayFeesPct: ebayFeesPct * 100,
-    netRevenue:  round(netRevenue),
-    netProfit:   round(netProfit),
-    marginPct:   round(marginPct),
-    roiPct:      round(roiPct),
+    ebayFees:         round(ebayFees),
+    ebayFeesPct:      ebayFeesPct * 100,
+    netRevenue:       round(netRevenue),
+    netProfit:        round(netProfit),
+    marginPct:        round(marginPct),
+    roiPct:           round(roiPct),
     verdict,
-    isProfitable: verdict === 'profitable',
+    isProfitable:     verdict === 'profitable',
+    maxPurchasePrice,
   }
 }
 

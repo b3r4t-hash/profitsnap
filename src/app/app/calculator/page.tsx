@@ -19,6 +19,14 @@ export default async function CalculatorPage() {
   const isNewDay = profile?.daily_reset_date !== today
   const dailyUsed = isNewDay ? 0 : (profile?.daily_calc_count ?? 0)
 
+  // Source de vérité pour l'exemple pré-rempli : 0 calcul sauvegardé = première visite
+  const { count } = await supabase
+    .from('calculations')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user!.id)
+
+  const isFirstVisit = (count ?? 0) === 0
+
   return (
     <div>
       <div className="mb-6">
@@ -30,6 +38,7 @@ export default async function CalculatorPage() {
       <CalculatorClient
         plan={profile?.plan ?? 'free'}
         dailyUsed={dailyUsed}
+        isFirstVisit={isFirstVisit}
       />
     </div>
   )

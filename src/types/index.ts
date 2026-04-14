@@ -53,4 +53,6 @@ export type CalculatorResult = {
   roiPct: number
   verdict: 'profitable' | 'low_margin' | 'loss'
   isProfitable: boolean
+  // Prix maximum d'achat pour atteindre au moins 15% de marge
+  maxPurchasePrice: number
 }
